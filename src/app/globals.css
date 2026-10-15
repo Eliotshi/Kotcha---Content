@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --surface-2: #f1f1ee;
+  --border: #e4e4df;
+  --text: #1a1a19;
+  --text-2: #55554f;
+  --muted: #86867e;
+  --accent: #2a78d6;
+  --accent-ink: #ffffff;
+  --accent-soft: #e6f0fc;
+  --good: #0a7a3d;
+  --good-soft: #e3f5ea;
+  --warning: #9a6400;
+  --warning-soft: #fdf2d8;
+  --critical: #c62828;
+  --critical-soft: #fde7e7;
+  --series-1: #2a78d6;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121211;
+    --surface: #1a1a19;
+    --surface-2: #232321;
+    --border: #2e2e2b;
+    --text: #f0efec;
+    --text-2: #c3c2b7;
+    --muted: #8f8e86;
+    --accent: #3987e5;
+    --accent-ink: #ffffff;
+    --accent-soft: #1b2a3d;
+    --good: #4cc27f;
+    --good-soft: #15291d;
+    --warning: #e0a63a;
+    --warning-soft: #2d2412;
+    --critical: #ef6b6b;
+    --critical-soft: #331818;
+    --series-1: #3987e5;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #121211;
+  --surface: #1a1a19;
+  --surface-2: #232321;
+  --border: #2e2e2b;
+  --text: #f0efec;
+  --text-2: #c3c2b7;
+  --muted: #8f8e86;
+  --accent: #3987e5;
+  --accent-ink: #ffffff;
+  --accent-soft: #1b2a3d;
+  --good: #4cc27f;
+  --good-soft: #15291d;
+  --warning: #e0a63a;
+  --warning-soft: #2d2412;
+  --critical: #ef6b6b;
+  --critical-soft: #331818;
+  --series-1: #3987e5;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-2: var(--text-2);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-critical: var(--critical);
+  --color-critical-soft: var(--critical-soft);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
