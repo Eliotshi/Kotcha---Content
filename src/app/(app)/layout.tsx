@@ -1,6 +1,6 @@
 import { requireApproved } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { signOut } from "@/app/auth/actions";
+import { signOut, signOutEverywhere } from "@/app/auth/actions";
 import { BottomNav, SideNav } from "@/components/nav";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
@@ -40,8 +40,25 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <form action={signOut}>
             <button className="mt-1 text-xs text-muted hover:text-text">Se déconnecter</button>
           </form>
+          <form action={signOutEverywhere}>
+            <button className="text-xs text-muted hover:text-text">Déconnecter tous mes appareils</button>
+          </form>
         </div>
       </aside>
+      <details className="group border-b border-border bg-surface px-4 py-2 md:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between text-sm">
+          <span className="font-semibold text-text">Kotcha Content</span>
+          <span className="max-w-[55%] truncate text-xs text-text-2">{profile.email} ▾</span>
+        </summary>
+        <div className="flex gap-4 py-2">
+          <form action={signOut}>
+            <button className="text-sm text-text-2">Se déconnecter</button>
+          </form>
+          <form action={signOutEverywhere}>
+            <button className="text-sm text-text-2">Déconnecter tous mes appareils</button>
+          </form>
+        </div>
+      </details>
       <main className="min-w-0 flex-1 px-4 pb-24 pt-6 md:px-8 md:pb-10 md:pt-8">
         <div className="mx-auto max-w-6xl">{children}</div>
       </main>

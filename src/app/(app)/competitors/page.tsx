@@ -5,7 +5,7 @@ import { fmtDate, fmtNumber, fmtRelative } from "@/lib/format";
 import { PLATFORM_LABEL, PLATFORMS, profileUrl } from "@/lib/platforms";
 import { PlatformTag } from "@/components/platform-icon";
 import { Badge, buttonClass, Card, CompetitorDot, inputClass, PageHeader, SectionTitle } from "@/components/ui";
-import { SubmitButton } from "@/components/submit-button";
+import { ActionButton } from "@/components/action-button";
 import { addAccount, addCompetitor, deleteAccount, deleteCompetitor, runCollectionNow, setAccountActive } from "../actions";
 
 export const metadata: Metadata = { title: "Concurrents" };
@@ -24,14 +24,15 @@ export default async function CompetitorsPage() {
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
 
-  const [{ data: competitors }, { data: accounts }, { data: runs }, { data: monthRuns }] = await Promise.all([
+  const [{ data: competitors }, { data: accounts }, { data: runs }, { data: monthRuns }, { data: settings }] = await Promise.all([
     supabase.from("competitors").select("*").order("name"),
     supabase.from("social_accounts").select("*").order("platform"),
     supabase.from("scrape_runs").select("*").order("started_at", { ascending: false }).limit(15),
     supabase
       .from("scrape_runs")
       .select("cost_usd")
-      .gte("started_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+      .gte("started_at", new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)).toISOString()),
+    supabase.from("app_settings").select("monthly_budget_apify_usd").eq("id", 1).maybeSingle(),
   ]);
   const monthCost = (monthRuns ?? []).reduce((sum, r) => sum + Number(r.cost_usd ?? 0), 0);
   const accountLabel = new Map((accounts ?? []).map((a) => [a.id, `${PLATFORM_LABEL[a.platform]} · ${a.platform === "linkedin" ? a.handle.replace(/^https?:\/\/(www\.)?linkedin\.com\//, "") : "@" + a.handle}`]));
@@ -47,13 +48,17 @@ export default async function CompetitorsPage() {
           </>
         }
         actions={
-          <form action={async () => { "use server"; await runCollectionNow(); }}>
-            <SubmitButton className={buttonClass.primary} pendingLabel="Lancement…">
-              Lancer une collecte maintenant
-            </SubmitButton>
-          </form>
+          <ActionButton action={runCollectionNow.bind(null, undefined)} className={buttonClass.primary} pendingLabel="Lancement…">
+            Lancer une collecte maintenant
+          </ActionButton>
         }
       />
+
+      <p className="-mt-3 mb-5 text-xs text-text-2">
+        Plafond Apify : {monthCost.toLocaleString("fr-FR", { style: "currency", currency: "USD" })} /{" "}
+        {Number(settings?.monthly_budget_apify_usd ?? 0).toLocaleString("fr-FR", { style: "currency", currency: "USD" })} ce mois-ci. Au-delà,
+        les collectes sont suspendues automatiquement.
+      </p>
 
       <div className="grid gap-4 lg:grid-cols-2">
         {(competitors ?? []).map((c) => {
@@ -73,7 +78,7 @@ export default async function CompetitorsPage() {
                   <CompetitorDot color={c.color} />
                   {c.name}
                   {c.website && (
-                    <a href={c.website} target="_blank" rel="noreferrer" className="text-xs font-normal text-text-2 hover:text-text">
+                    <a href={c.website} target="_blank" rel="noopener noreferrer" className="text-xs font-normal text-text-2 hover:text-text">
                       site ↗
                     </a>
                   )}
@@ -93,11 +98,9 @@ export default async function CompetitorsPage() {
                       <form action={setAccountActive.bind(null, a.id, !a.active)}>
                         <button className={buttonClass.ghost}>{a.active ? "Pause" : "Réactiver"}</button>
                       </form>
-                      <form action={async () => { "use server"; await runCollectionNow(a.id); }}>
-                        <button className={buttonClass.ghost} disabled={!a.active}>
-                          Collecter
-                        </button>
-                      </form>
+                      <ActionButton action={runCollectionNow.bind(null, a.id)} className={buttonClass.ghost} pendingLabel="…" disabled={!a.active}>
+                        Collecter
+                      </ActionButton>
                       {isAdmin && (
                         <form action={deleteAccount.bind(null, a.id)}>
                           <button className={buttonClass.danger} aria-label="Supprimer le compte">
@@ -149,6 +152,7 @@ export default async function CompetitorsPage() {
                 <th className="px-4 py-2 font-medium">Date</th>
                 <th className="px-4 py-2 font-medium">Compte</th>
                 <th className="px-4 py-2 font-medium">Statut</th>
+                <th className="px-4 py-2 font-medium">Qualité</th>
                 <th className="px-4 py-2 text-right font-medium">Posts</th>
                 <th className="px-4 py-2 text-right font-medium">Nouveaux</th>
                 <th className="px-4 py-2 text-right font-medium">Coût</th>
@@ -158,10 +162,27 @@ export default async function CompetitorsPage() {
               {(runs ?? []).map((r) => (
                 <tr key={r.id} className="border-b border-border last:border-0">
                   <td className="px-4 py-2 text-text-2">{fmtDate(r.started_at, true)}</td>
-                  <td className="px-4 py-2 text-text">{r.account_ids.map((id) => accountLabel.get(id) ?? "compte supprimé").join(", ")}</td>
+                  <td className="px-4 py-2 text-text">
+                    {r.purpose === "media"
+                      ? `Médias ${PLATFORM_LABEL[r.platform]} (${r.post_ids.length} post${r.post_ids.length > 1 ? "s" : ""})`
+                      : r.account_ids.map((id) => accountLabel.get(id) ?? "compte supprimé").join(", ")}
+                  </td>
                   <td className="px-4 py-2">
                     <Badge tone={RUN_TONE[r.status] ?? "neutral"}>{r.status}</Badge>
                     {r.error && <div className="mt-1 max-w-xs truncate text-xs text-critical" title={r.error}>{r.error}</div>}
+                  </td>
+                  <td className="px-4 py-2">
+                    {r.health ? (
+                      <Badge tone={r.health === "ok" ? "good" : r.health === "warning" ? "warning" : "critical"}>
+                        {r.health === "ok" ? "OK" : r.health === "warning" ? "À vérifier" : "Problème"}
+                      </Badge>
+                    ) : (
+                      "—"
+                    )}
+                    {Array.isArray((r.quality as { issues?: string[] } | null)?.issues) &&
+                      ((r.quality as { issues: string[] }).issues.length > 0) && (
+                        <div className="mt-1 max-w-xs text-xs text-text-2">{(r.quality as { issues: string[] }).issues.join(" ; ")}</div>
+                      )}
                   </td>
                   <td className="px-4 py-2 text-right">{r.items_count ?? "—"}</td>
                   <td className="px-4 py-2 text-right">{r.new_posts ?? "—"}</td>
@@ -170,7 +191,7 @@ export default async function CompetitorsPage() {
               ))}
               {!runs?.length && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-text-2">
+                  <td colSpan={7} className="px-4 py-6 text-center text-text-2">
                     Aucune collecte pour l&apos;instant.
                   </td>
                 </tr>

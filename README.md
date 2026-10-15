@@ -17,15 +17,27 @@ Vercel Cron (tous les 2 jours)
 Vercel Cron quotidien ─► /api/cron/process (rattrapage des posts en attente / en échec)
 ```
 
-- **Score de surperformance** : vues du post ÷ médiane des 30 derniers posts du même compte (interactions pour LinkedIn, qui n'expose pas les vues). Calculé par la vue SQL `post_feed`.
+- **Score à âge égal** : un post est comparé à ce que les autres posts du même compte faisaient **au même âge** (vues, ou interactions pour LinkedIn), d'après l'historique des relevés. Un post de 1 h est donc noté sur son rythme de lancement, avec la mention « provisoire » avant 48 h et un niveau de fiabilité selon le nombre de posts comparables (≥ 3 requis). Méthode détaillée dans `src/lib/scoring.ts`, tests dans `tests/`.
+- **Catégories à part** : posts épinglés, partenariats / sponsorisés et collabs sont affichés dans leurs propres onglets et exclus des références (leur portée ne dépend pas que du contenu).
 - **Scripts** : à partir de 1 à 5 posts sources + un brief + la voix de marque (réglée dans Admin), Claude génère hooks, découpage plan par plan, interview éventuelle, liste de plans, légende. Les scripts suivent un Kanban Brouillon → Validé → Tourné → Publié.
+
+## Garde-fous
+
+- **Budgets** : plafonds mensuels Apify et IA (Admin). À 80 % une alerte est émise ; à 100 % collectes et analyses sont suspendues. Les coûts IA sont calculés à partir des tokens réellement consommés.
+- **Limites d'usage** : collectes manuelles, générations de scripts et ré-analyses sont limitées par 24 h (réglable dans Admin).
+- **Collecte TikTok économe** : la vidéo n'est téléchargée que pour les nouveaux posts (collecte « média » ciblée). Un lien vidéo Instagram expiré est rafraîchi une fois automatiquement.
+- **Qualité des données** : chaque collecte est contrôlée (volume, champs vides, champs disparus). Problèmes, collectes en échec, comptes non collectés depuis 3 jours et file bloquée génèrent des alertes (bandeau dans la Veille, page Admin, et webhook Slack/Discord/Teams si `ALERT_WEBHOOK_URL` est défini).
+- **Fiabilité de l'IA** : l'analyse indique ce qu'elle a réellement reçu (images de la vidéo ou miniature seule, transcription ou non) ; une analyse incomplète est marquée « partielle ». Les explications de performance sont présentées comme des hypothèses. Le format et le type de hook peuvent être corrigés à la main (la correction n'est pas écrasée par une ré-analyse). Les instructions cachées dans les contenus concurrents sont signalées.
+- **RGPD** : pas de conservation des réponses brutes (commentaires, comptes tagués), purge automatique après la durée de conservation choisie. Voir `docs/RGPD.md`.
 
 ## Comptes et accès
 
-- Connexion par **code à usage unique envoyé par email** (Supabase Auth). La session est stockée en cookies et se rafraîchit automatiquement : un appareil reste connecté sans re-saisir de code.
+- Connexion par **code à usage unique envoyé par email** (Supabase Auth). La session est stockée en cookies et se rafraîchit automatiquement : un appareil reste connecté sans re-saisir de code, jusqu'à 30 jours d'inactivité (`INACTIVITY_DAYS`).
+- **Domaines autorisés** (Admin) : seules les adresses de ces domaines peuvent créer un compte. Le contrôle a lieu dans la base, il ne peut pas être contourné en appelant l'API directement.
+- Chacun peut « Déconnecter tous mes appareils » ; un admin peut déconnecter les appareils d'un membre.
 - Toute nouvelle personne arrive en **« en attente »** ; un administrateur valide (ou refuse) l'accès dans **Admin**.
 - Les emails de la table `admin_bootstrap` sont validés **administrateurs** automatiquement à leur première connexion.
-- Les règles d'accès sont appliquées en base (RLS) : un compte non validé ne lit aucune donnée.
+- Les règles d'accès sont appliquées en base (RLS) : un compte non validé ne lit aucune donnée ; les suppressions de concurrents et de comptes sont réservées aux admins ; un script ne peut être supprimé que par son auteur ou un admin ; les posts et analyses sont en lecture seule côté API.
 
 ## Stack
 
@@ -58,7 +70,8 @@ Voir `.env.example`. En local : `cp .env.example .env.local` puis compléter. Su
 | --- | --- |
 | `SUPABASE_SECRET_KEY` | accès serveur (crons, webhooks, analyse) |
 | `APP_URL` | URL publique de l'app (pour le webhook Apify) |
-| `CRON_SECRET` / `JOBS_SECRET` | secrets aléatoires (`openssl rand -hex 32`) |
+| `CRON_SECRET` / `JOBS_SECRET` / `APIFY_WEBHOOK_SECRET` | trois secrets aléatoires distincts (`openssl rand -hex 32`) |
+| `ALERT_WEBHOOK_URL` | optionnel : webhook Slack / Discord / Teams pour les alertes |
 | `APIFY_TOKEN` | Apify → Settings → Integrations |
 | `ANTHROPIC_API_KEY` | analyse et génération (modèle : `ANTHROPIC_MODEL`) |
 | `OPENAI_API_KEY` | optionnel : transcription audio Instagram / LinkedIn |
@@ -68,9 +81,17 @@ Voir `.env.example`. En local : `cp .env.example .env.local` puis compléter. Su
 ```bash
 npm install
 npm run dev
+npm test        # tests du calcul de score
+npm run typecheck
 ```
 
 Pour tester le webhook Apify en local, exposer le port avec un tunnel (ngrok, cloudflared) et mettre l'URL du tunnel dans `APP_URL`.
+
+## Hébergement recommandé pour l'usage en équipe
+
+- **Supabase Pro** : sauvegardes quotidiennes, pas de mise en pause, expiration de session configurable.
+- **Vercel Pro** : usage commercial autorisé. Laisser la protection d'accès sur les previews uniquement ; `APP_URL` doit pointer vers le domaine de production (webhooks Apify et enchaînement des analyses).
+- Plafonds de dépenses à poser aussi chez les fournisseurs (Apify, Anthropic, OpenAI) en plus de ceux de l'application.
 
 ## Points à vérifier au premier run
 

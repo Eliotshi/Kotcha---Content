@@ -83,11 +83,42 @@ export function EmptyState({ title, children }: { title: string; children?: Reac
   );
 }
 
-/** Score de surperformance : icône + libellé, jamais la couleur seule. */
-export function OutlierBadge({ score }: { score: number | null | undefined }) {
-  if (score === null || score === undefined) return null;
-  const label = `${score.toLocaleString("fr-FR", { maximumFractionDigits: 1 })}×`;
-  if (score >= 2) return <Badge tone="good">▲ {label} sa moyenne</Badge>;
-  if (score < 0.6) return <Badge tone="neutral">▼ {label}</Badge>;
-  return <Badge tone="neutral">{label}</Badge>;
+/**
+ * Score à âge égal : icône + libellé, jamais la couleur seule.
+ * « provisoire » avant 48 h (le post est encore en phase de lancement), « fiabilité faible » si peu de posts comparables.
+ */
+export function OutlierBadge({
+  score,
+  confidence,
+  ageHours,
+  showMissing = false,
+}: {
+  score: number | null | undefined;
+  confidence?: string | null;
+  ageHours?: number | null;
+  showMissing?: boolean;
+}) {
+  if (score === null || score === undefined) {
+    return showMissing ? <Badge tone="neutral">Score : historique insuffisant</Badge> : null;
+  }
+  const value = `${score.toLocaleString("fr-FR", { maximumFractionDigits: 1 })}×`;
+  const qualifiers = [
+    ageHours !== null && ageHours !== undefined && ageHours < 48 ? `provisoire (${Math.round(ageHours)} h)` : null,
+    confidence === "low" ? "fiabilité faible" : null,
+  ].filter(Boolean);
+  const suffix = qualifiers.length ? ` · ${qualifiers.join(" · ")}` : "";
+  if (score >= 2) return <Badge tone="good">▲ {value} à âge égal{suffix}</Badge>;
+  if (score < 0.6) return <Badge tone="neutral">▼ {value}{suffix}</Badge>;
+  return <Badge tone="neutral">{value}{suffix}</Badge>;
+}
+
+/** Catégories exclues de la référence de score (leur portée ne dépend pas que du contenu). */
+export function PostFlags({ pinned, paid, collab }: { pinned?: boolean | null; paid?: boolean | null; collab?: boolean | null }) {
+  return (
+    <>
+      {pinned && <Badge tone="accent">📌 Épinglé</Badge>}
+      {paid && <Badge tone="warning">Partenariat / sponsorisé</Badge>}
+      {collab && <Badge tone="warning">Collab</Badge>}
+    </>
+  );
 }

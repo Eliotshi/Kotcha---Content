@@ -3,9 +3,10 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { requestCode } from "@/app/auth/actions";
 import { buttonClass, Card, inputClass } from "@/components/ui";
 
-export function LoginForm() {
+export function LoginForm({ expired = false }: { expired?: boolean }) {
   const router = useRouter();
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
@@ -18,17 +19,9 @@ export function LoginForm() {
     e?.preventDefault();
     setError(null);
     startTransition(async () => {
-      const supabase = createClient();
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email.trim().toLowerCase(),
-        options: { shouldCreateUser: true },
-      });
-      if (error) {
-        setError(
-          error.status === 429
-            ? "Trop de demandes. Patiente une minute avant de redemander un code."
-            : `Impossible d'envoyer le code : ${error.message}`,
-        );
+      const result = await requestCode(email);
+      if (!result.ok) {
+        setError(result.error);
         return;
       }
       setStep("code");
@@ -78,6 +71,7 @@ export function LoginForm() {
               onChange={(e) => setEmail(e.target.value)}
             />
           </label>
+          {expired && !error && <p className="text-sm text-text-2">Session expirée après une longue inactivité : reconnecte-toi.</p>}
           {error && <p className="text-sm text-critical">{error}</p>}
           <button type="submit" disabled={pending || !email} className={buttonClass.primary}>
             {pending ? "Envoi…" : "Recevoir un code"}

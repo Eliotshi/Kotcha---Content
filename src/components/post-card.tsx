@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Views } from "@/lib/database.types";
 import { fmtDate, fmtDuration, fmtNumber, storageUrl } from "@/lib/format";
 import { FORMATS, label, PROCESSING_LABEL } from "@/lib/labels";
-import { Badge, Card, CompetitorDot, OutlierBadge } from "@/components/ui";
+import { Badge, Card, CompetitorDot, OutlierBadge, PostFlags } from "@/components/ui";
 import { PlatformTag } from "@/components/platform-icon";
 
 export type FeedPost = Views<"post_feed">;
@@ -55,8 +55,16 @@ export function PostCard({ post }: { post: FeedPost }) {
             <span className="tabular">
               <span className="font-semibold text-text">{fmtNumber(post.comments)}</span> comm.
             </span>
-            <OutlierBadge score={post.outlier_score} />
+            {post.perf_age_hours !== null && post.perf_age_hours < 48 && post.perf_per_hour !== null && (
+              <span className="tabular">
+                <span className="font-semibold text-text">{fmtNumber(post.perf_per_hour)}</span>
+                {post.perf_metric === "views" ? " vues/h" : " interactions/h"}
+              </span>
+            )}
+            <OutlierBadge score={post.outlier_score} confidence={post.perf_confidence} ageHours={post.perf_age_hours} />
+            <PostFlags pinned={post.is_pinned} paid={post.is_paid_partnership} collab={post.is_collab} />
             {post.format && <Badge>{label(FORMATS, post.format)}</Badge>}
+            {post.analysis_quality === "partial" && <Badge tone="warning">Analyse partielle</Badge>}
             {post.processing_status && post.processing_status !== "done" && (
               <Badge tone={post.processing_status === "failed" ? "critical" : "warning"}>
                 {label(PROCESSING_LABEL, post.processing_status)}

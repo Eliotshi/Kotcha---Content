@@ -3,7 +3,8 @@ import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = { title: "Connexion" };
 
-export default function LoginPage() {
+export default async function LoginPage({ searchParams }: PageProps<"/login">) {
+  const { expired } = await searchParams;
   return (
     <main className="flex min-h-dvh items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm">
@@ -15,7 +16,7 @@ export default function LoginPage() {
             <div className="text-xs text-text-2">Veille concurrentielle et scripts vidéo</div>
           </div>
         </div>
-        <LoginForm />
+        <LoginForm expired={expired === "1"} />
       </div>
     </main>
   );

@@ -13,6 +13,11 @@ export const env = {
   appUrl: () => required("APP_URL").replace(/\/$/, ""),
   cronSecret: () => required("CRON_SECRET"),
   jobsSecret: () => required("JOBS_SECRET"),
+  /** Secret distinct pour les webhooks Apify (envoyé dans un en-tête, jamais dans l'URL). */
+  apifyWebhookSecret: () => required("APIFY_WEBHOOK_SECRET"),
+  /** Webhook entrant Slack / Discord / Teams pour les alertes (optionnel). */
+  alertWebhookUrl: () => process.env.ALERT_WEBHOOK_URL || null,
+  transcriptionUsdPerMin: () => Number(process.env.TRANSCRIPTION_USD_PER_MIN || 0.006),
   apifyToken: () => required("APIFY_TOKEN"),
   anthropicModel: () => process.env.ANTHROPIC_MODEL || "claude-opus-5-5",
   openaiKey: () => process.env.OPENAI_API_KEY || null,

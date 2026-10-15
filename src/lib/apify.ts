@@ -37,6 +37,9 @@ export async function startActorRun(actorId: string, input: unknown, webhookUrl:
       {
         eventTypes: ["ACTOR.RUN.SUCCEEDED", "ACTOR.RUN.FAILED", "ACTOR.RUN.TIMED_OUT", "ACTOR.RUN.ABORTED"],
         requestUrl: webhookUrl,
+        // Le secret voyage dans un en-tête : il n'apparaît ni dans l'URL ni dans les journaux d'accès.
+        headersTemplate: JSON.stringify({ Authorization: `Bearer ${env.apifyWebhookSecret()}` }),
+        shouldInterpolateStrings: false,
       },
     ]),
   ).toString("base64");

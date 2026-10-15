@@ -1,4 +1,4 @@
-import type { Enums, Json, TablesInsert } from "@/lib/database.types";
+import type { Enums, TablesInsert } from "@/lib/database.types";
 
 export type Platform = Enums<"platform">;
 
@@ -12,7 +12,7 @@ export const PLATFORM_LABEL: Record<Platform, string> = {
 
 type Item = Record<string, unknown>;
 
-export type NormalizedPost = Omit<TablesInsert<"posts">, "account_id"> & {
+export type NormalizedPost = Omit<TablesInsert<"posts">, "account_id" | "raw"> & {
   followers?: number | null;
 };
 
@@ -32,7 +32,8 @@ export function buildActorInput(platform: Platform, handle: string, limit: numbe
         resultsPerPage: limit,
         profileScrapeSections: ["videos"],
         profileSorting: "latest",
-        shouldDownloadVideos: true,
+        // Pas de téléchargement vidéo ici : on ne paie la vidéo que pour les nouveaux posts (buildMediaInput).
+        shouldDownloadVideos: false,
         shouldDownloadCovers: true,
         shouldDownloadSubtitles: true,
         shouldDownloadSlideshowImages: false,
@@ -50,6 +51,29 @@ export function buildActorInput(platform: Platform, handle: string, limit: numbe
         limit,
       };
     }
+  }
+}
+
+/**
+ * Collecte « média » ciblée : uniquement les posts à analyser (vidéos TikTok des nouveaux posts,
+ * liens vidéo Instagram expirés). Renvoie null quand la plateforme n'en a pas besoin.
+ */
+export function buildMediaInput(platform: Platform, postUrls: string[]): Record<string, unknown> | null {
+  if (!postUrls.length) return null;
+  switch (platform) {
+    case "tiktok":
+      return {
+        postURLs: postUrls,
+        resultsPerPage: postUrls.length,
+        shouldDownloadVideos: true,
+        shouldDownloadCovers: true,
+        shouldDownloadSubtitles: true,
+        shouldDownloadSlideshowImages: false,
+      };
+    case "instagram":
+      return { directUrls: postUrls, resultsType: "posts", resultsLimit: postUrls.length, addParentData: false };
+    case "linkedin":
+      return null;
   }
 }
 
@@ -109,6 +133,19 @@ function date(v: unknown): string | null {
     return Number.isNaN(d.getTime()) ? null : d.toISOString();
   }
   return null;
+}
+
+const SPONSORED_CAPTION = /(#(ad|pub|sponsoris[ée]e?|partenariat|partnership|collab)\b|partenariat r[ée]mun[ée]r[ée]|paid partnership|en collaboration avec)/i;
+
+function flags(item: Item, caption: string | null, paths: { pinned: string[]; paid: string[]; collab: string[] }) {
+  const truthy = (v: unknown) => v === true || (Array.isArray(v) && v.length > 0);
+  return {
+    is_pinned: paths.pinned.some((p) => truthy(get(item, p))),
+    is_paid_partnership: paths.paid.some((p) => truthy(get(item, p))) || SPONSORED_CAPTION.test(caption ?? ""),
+    is_collab: paths.collab.some((p) => truthy(get(item, p))),
+    // Minimisation RGPD : on ne garde que la liste des clés (détection des changements de format), pas les valeurs.
+    source_keys: Object.keys(item).sort(),
+  };
 }
 
 function hashtagsFrom(text: string | null, list?: unknown): string[] {
@@ -174,7 +211,11 @@ function normalizeInstagram(item: Item): NormalizedPost | null {
     shares: null,
     saves: null,
     followers: num(first(item, "followersCount", "ownerFollowersCount")),
-    raw: item as Json,
+    ...flags(item, caption, {
+      pinned: ["isPinned", "pinned"],
+      paid: ["isSponsored", "paidPartnership", "isPaidPartnership"],
+      collab: ["coauthorProducers"],
+    }),
   };
 }
 
@@ -209,7 +250,11 @@ function normalizeTiktok(item: Item): NormalizedPost | null {
     shares: num(item.shareCount),
     saves: num(item.collectCount),
     followers: num(get(item, "authorMeta.fans")),
-    raw: item as Json,
+    ...flags(item, caption, {
+      pinned: ["isPinned", "pinned"],
+      paid: ["isAd", "isSponsored", "isPaidPartnership"],
+      collab: ["collaborators"],
+    }),
   };
 }
 
@@ -239,6 +284,20 @@ function normalizeLinkedin(item: Item): NormalizedPost | null {
     shares: num(first(item, "engagement.shares", "numShares", "repostsCount", "shares")),
     saves: null,
     followers: num(first(item, "author.followerCount", "author.followers", "company.followerCount")),
-    raw: item as Json,
+    ...flags(item, caption, { pinned: ["isPinned", "pinned"], paid: ["isSponsored", "sponsored"], collab: [] }),
   };
 }
+
+/**
+ * Champs attendus dans la réponse de chaque actor (chaque groupe = alternatives équivalentes).
+ * S'ils disparaissent de tous les résultats, l'actor a probablement changé de format.
+ */
+export const EXPECTED_KEYS: Record<Platform, string[][]> = {
+  instagram: [["shortCode", "id"], ["timestamp"], ["likesCount"], ["commentsCount"], ["type"], ["displayUrl"]],
+  tiktok: [["id"], ["createTimeISO", "createTime"], ["playCount"], ["diggCount"], ["commentCount"], ["webVideoUrl"]],
+  linkedin: [
+    ["id", "urn", "postId", "entityId", "linkedinUrl", "url", "postUrl"],
+    ["content", "text", "commentary", "postText"],
+    ["postedAt", "publishedAt", "date", "time"],
+  ],
+};

@@ -6,7 +6,7 @@ import { FORMATS, label, SCRIPT_KINDS } from "@/lib/labels";
 import { buttonClass, Card, CompetitorDot, inputClass, OutlierBadge, PageHeader } from "@/components/ui";
 import { PlatformTag } from "@/components/platform-icon";
 import { SubmitButton } from "@/components/submit-button";
-import { createScript } from "../../actions";
+import { ScriptForm } from "@/components/script-form";
 
 export const metadata: Metadata = { title: "Nouveau script" };
 // La génération (Claude) prend de 30 s à 2 min.
@@ -19,7 +19,7 @@ export default async function NewScriptPage({ searchParams }: PageProps<"/script
   const supabase = await createClient();
   const { data: candidates } = await supabase
     .from("post_feed")
-    .select("id, competitor_name, competitor_color, platform, published_at, hook, caption, format, outlier_score, views")
+    .select("id, competitor_name, competitor_color, platform, published_at, hook, caption, format, outlier_score, views, perf_confidence, perf_age_hours, is_pinned, is_paid_partnership, is_collab")
     .eq("processing_status", "done")
     .gte("published_at", daysAgoIso(90))
     .order("outlier_score", { ascending: false, nullsFirst: false })
@@ -30,7 +30,7 @@ export default async function NewScriptPage({ searchParams }: PageProps<"/script
   const { data: extra } = missing.length
     ? await supabase
         .from("post_feed")
-        .select("id, competitor_name, competitor_color, platform, published_at, hook, caption, format, outlier_score, views")
+        .select("id, competitor_name, competitor_color, platform, published_at, hook, caption, format, outlier_score, views, perf_confidence, perf_age_hours, is_pinned, is_paid_partnership, is_collab")
         .in("id", missing)
     : { data: [] };
   const posts = [...(extra ?? []), ...(candidates ?? [])].sort(
@@ -46,7 +46,7 @@ export default async function NewScriptPage({ searchParams }: PageProps<"/script
       </div>
       <PageHeader title="Nouveau script" subtitle="Choisis un format, un brief et les posts concurrents dont s'inspirer (5 max)." />
 
-      <form action={createScript} className="grid gap-6 lg:grid-cols-[360px_1fr]">
+      <ScriptForm className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <Card className="flex h-fit flex-col gap-4 p-4 lg:sticky lg:top-8">
           <fieldset className="flex flex-col gap-2">
             <legend className="mb-1 text-xs font-medium text-text-2">Format</legend>
@@ -95,7 +95,7 @@ export default async function NewScriptPage({ searchParams }: PageProps<"/script
                     <PlatformTag platform={p.platform} />
                     <span>{fmtDate(p.published_at)}</span>
                     {p.views !== null && <span>{fmtNumber(p.views)} vues</span>}
-                    <OutlierBadge score={p.outlier_score} />
+                    <OutlierBadge score={p.outlier_score} confidence={p.perf_confidence} ageHours={p.perf_age_hours} />
                     {p.format && <span>· {label(FORMATS, p.format)}</span>}
                   </div>
                   <p className="mt-1 line-clamp-2 text-sm text-text">{p.hook ? `« ${p.hook} »` : p.caption}</p>
@@ -104,7 +104,7 @@ export default async function NewScriptPage({ searchParams }: PageProps<"/script
             </label>
           ))}
         </div>
-      </form>
+      </ScriptForm>
     </>
   );
 }

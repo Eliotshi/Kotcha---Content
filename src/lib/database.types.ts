@@ -32,9 +32,27 @@ type AnalysisRow = {
   theme: string | null;
   tone: string | null;
   why_it_works: string | null;
+  confidence: string | null;
+  uncertainties: string | null;
+  suspicious_content: boolean;
+  format_locked: boolean;
+  edited_by: string | null;
+  edited_at: string | null;
 };
 
-type AppSettingsRow = { brand_voice: string; id: number; updated_at: string; updated_by: string | null };
+type AppSettingsRow = {
+  brand_voice: string;
+  id: number;
+  updated_at: string;
+  updated_by: string | null;
+  allowed_email_domains: string[];
+  monthly_budget_apify_usd: number;
+  monthly_budget_ai_usd: number;
+  daily_limit_manual_collections: number;
+  daily_limit_scripts_per_user: number;
+  daily_limit_reprocess_per_user: number;
+  retention_months: number;
+};
 
 type CompetitorRow = {
   color: string;
@@ -70,6 +88,7 @@ type PostMetricsRow = {
   saves: number | null;
   shares: number | null;
   views: number | null;
+  scrape_run_id: string | null;
 };
 
 type PostRow = {
@@ -91,7 +110,6 @@ type PostRow = {
   processing_error: string | null;
   processing_status: ProcessingStatus;
   published_at: string | null;
-  raw: Json | null;
   saves: number | null;
   shares: number | null;
   subtitles_url: string | null;
@@ -101,6 +119,26 @@ type PostRow = {
   url: string | null;
   video_source_url: string | null;
   views: number | null;
+  /** Obsolète (RGPD) : plus écrite. */
+  raw: Json | null;
+  source_keys: string[];
+  is_pinned: boolean;
+  is_paid_partnership: boolean;
+  is_collab: boolean;
+  media_ready: boolean;
+  media_refresh_count: number;
+  analysis_quality: string | null;
+  analysis_inputs: Json | null;
+  perf_metric: string | null;
+  perf_value: number | null;
+  perf_age_hours: number | null;
+  perf_per_hour: number | null;
+  perf_baseline: number | null;
+  perf_score: number | null;
+  perf_sample: number | null;
+  perf_confidence: string | null;
+  perf_estimated: boolean;
+  score_updated_at: string | null;
 };
 
 type ProfileRow = {
@@ -128,6 +166,10 @@ type ScrapeRunRow = {
   started_at: string;
   status: string;
   trigger: string;
+  purpose: string;
+  post_ids: string[];
+  quality: Json | null;
+  health: string | null;
 };
 
 type SocialAccountRow = {
@@ -183,6 +225,40 @@ type PostFeedRow = {
   thumbnail_source_url: string | null;
   url: string | null;
   views: number | null;
+  analysis_quality: string | null;
+  is_pinned: boolean | null;
+  is_paid_partnership: boolean | null;
+  is_collab: boolean | null;
+  perf_metric: string | null;
+  perf_age_hours: number | null;
+  perf_per_hour: number | null;
+  perf_sample: number | null;
+  perf_confidence: string | null;
+  perf_estimated: boolean | null;
+  engagement_basis: string | null;
+  analysis_confidence: string | null;
+};
+
+type UsageEventRow = {
+  id: number;
+  user_id: string | null;
+  kind: string;
+  cost_usd: number;
+  ref_id: string | null;
+  meta: Json | null;
+  created_at: string;
+};
+
+type AlertRow = {
+  id: string;
+  level: "info" | "warning" | "critical";
+  kind: string;
+  message: string;
+  dedupe_key: string | null;
+  ref: Json | null;
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
 };
 
 type WithOptional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
@@ -210,6 +286,8 @@ export type Database = {
         SocialAccountRow,
         WithOptional<SocialAccountRow, Exclude<keyof SocialAccountRow, "competitor_id" | "handle" | "platform">>
       >;
+      usage_events: Table<UsageEventRow, WithOptional<Omit<UsageEventRow, "id">, Exclude<keyof Omit<UsageEventRow, "id">, "kind">>>;
+      alerts: Table<AlertRow, WithOptional<AlertRow, Exclude<keyof AlertRow, "level" | "kind" | "message">>>;
       transcripts: Table<TranscriptRow, WithOptional<TranscriptRow, Exclude<keyof TranscriptRow, "post_id">>>;
     };
     Views: {
@@ -218,6 +296,19 @@ export type Database = {
     Functions: {
       is_admin: { Args: never; Returns: boolean };
       is_approved: { Args: never; Returns: boolean };
+      admin_list_users: {
+        Args: never;
+        Returns: {
+          id: string;
+          email: string;
+          role: ProfileRole;
+          status: ProfileStatus;
+          created_at: string;
+          last_sign_in_at: string | null;
+          active_sessions: number;
+        }[];
+      };
+      admin_revoke_sessions: { Args: { target: string }; Returns: undefined };
     };
     Enums: {
       platform: Platform;

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/auth";
 import type { GeneratedScript } from "@/lib/ai";
 import { fmtDate } from "@/lib/format";
 import { label, SCRIPT_KINDS, SCRIPT_STATUSES } from "@/lib/labels";
@@ -52,6 +53,8 @@ export default async function ScriptPage({ params }: PageProps<"/scripts/[id]">)
     ? await supabase.from("post_feed").select("id, competitor_name, competitor_color, hook, caption, platform").in("id", row.source_post_ids)
     : { data: [] };
 
+  const profile = await getCurrentProfile();
+  const canDelete = profile?.role === "admin" || row.created_by === profile?.id;
   const s = row.content as unknown as GeneratedScript;
   const saveNotes = updateScriptNotes.bind(null, id);
   const remove = deleteScript.bind(null, id);
@@ -226,9 +229,11 @@ export default async function ScriptPage({ params }: PageProps<"/scripts/[id]">)
             </Card>
           )}
 
-          <form action={remove}>
-            <button className={`${buttonClass.danger} w-full`}>Supprimer le script</button>
-          </form>
+          {canDelete && (
+            <form action={remove}>
+              <button className={`${buttonClass.danger} w-full`}>Supprimer le script</button>
+            </form>
+          )}
         </div>
       </div>
     </>

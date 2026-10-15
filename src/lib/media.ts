@@ -9,9 +9,23 @@ import { withApifyAuth } from "@/lib/apify";
 const run = promisify(execFile);
 const MAX_VIDEO_BYTES = 150 * 1024 * 1024;
 
+export class DownloadError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+  /** Lien expiré ou retiré (les liens vidéo Instagram expirent en quelques heures). */
+  get expired() {
+    return [401, 403, 404, 410].includes(this.status);
+  }
+}
+
 export async function download(url: string, maxBytes = MAX_VIDEO_BYTES): Promise<{ buffer: Buffer; contentType: string }> {
-  const res = await fetch(url, { ...withApifyAuth(url), cache: "no-store" });
-  if (!res.ok) throw new Error(`Téléchargement impossible (${res.status}) : ${url.slice(0, 120)}`);
+  if (!/^https:\/\//.test(url)) throw new DownloadError("URL non https refusée", 0);
+  const res = await fetch(url, { ...withApifyAuth(url), cache: "no-store", signal: AbortSignal.timeout(60_000) });
+  if (!res.ok) throw new DownloadError(`Téléchargement impossible (${res.status})`, res.status);
   const length = Number(res.headers.get("content-length") ?? 0);
   if (length > maxBytes) throw new Error(`Fichier trop lourd (${Math.round(length / 1e6)} Mo)`);
   const buffer = Buffer.from(await res.arrayBuffer());
